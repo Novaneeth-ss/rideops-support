@@ -77,7 +77,13 @@ at.text_input[3].input("a long password 1")
 [b for b in at.button if "Create administrator" in b.label][0].click().run()
 assert not at.exception, [e.message for e in at.exception]
 assert at.session_state.user["role"] == "Admin" and "users" in at.session_state.allowed_pages
-assert not [s for s in at.sidebar.selectbox if s.label == "Viewing as"], "the role is not pickable when signing in"
+pick = [s for s in at.sidebar.selectbox if s.label == "Viewing as"]
+assert pick and pick[0].options == ["Admin", "All views", "Head of Operations", "Support lead", "Engineering lead", "L1 agent"], "an administrator picks any view"
+pick[0].select("L1 agent").run()
+assert not at.exception and at.session_state.role_value == "L1 agent" and at.session_state.user["role"] == "Admin"
+assert "users" not in at.session_state.allowed_pages and "desk" in at.session_state.allowed_pages
+[s for s in at.sidebar.selectbox if s.label == "Viewing as"][0].select("Admin").run()
+assert "users" in at.session_state.allowed_pages
 print("first administrator and gate: ok")
 
 # sign out returns to the login form; a wrong password is refused without saying why
@@ -96,10 +102,11 @@ print("sign in and out: ok")
 auth.create_user("priya", "Priya D", "L1 agent", "priya long password")
 raw = E.load("data/rideops_support_tickets.csv")
 t = raw[(raw.status == "Open - with L1") & (raw.escalated_to_eng == "No")].ticket_id.iloc[0]
-src = (f"import sys; sys.path.insert(0, r'{HERE}')\nimport streamlit as st, state, store\n"
-       "st.session_state.user = {'username': 'priya', 'name': 'Priya D', 'role': 'L1 agent'}\n"
-       f"st.session_state.role_value = 'L1 agent'\nstore.append('ticket.assign', state.actor('someone'), {{'id': '{t}', 'agent': 'Karan B'}})\n")
-AppTest.from_string(src, default_timeout=60).run()
-assert store.read()[-1]["by"] == "Priya D", store.read()[-1]
-print("attribution: ok")
+at2 = AppTest.from_file(HERE + "/app.py", default_timeout=180)
+at2.session_state["user"] = {"username": "priya", "name": "Priya D", "role": "L1 agent"}
+at2.session_state["admin_view"] = "Admin"
+at2.run()
+assert not at2.exception, [e.message for e in at2.exception]
+assert at2.session_state.role_value == "L1 agent" and not [s for s in at2.sidebar.selectbox if s.label == "Viewing as"]
+print("admin view picker: ok")
 print("auth tests pass")

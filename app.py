@@ -72,6 +72,8 @@ if AUTH:                                           # sign-in is on: nothing else
         st.stop()
     ss.role_value = ss.user["role"]                # the role comes from the account, not from a picker
     CAN_ADMIN = ss.user["role"] == "Admin"          # data and policy are shared by everyone: only administrators change them
+    if CAN_ADMIN and ss.get("admin_view") in ROLES:  # an administrator may look at the app as any role; the account stays Admin
+        ss.role_value = ss.admin_view
 allowed = ROLES[ss.role_value]
 ss.allowed_pages = allowed
 ctx = state.context()
@@ -127,6 +129,10 @@ sb = st.sidebar
 # picker to it every run (a stale picker would otherwise push its old value back after a page switch)
 if AUTH:
     sb.markdown(f"Signed in as **{ss.user['name']}** · {ss.user['role']}")
+    if CAN_ADMIN:
+        ss.role = ss.role_value
+        sb.selectbox("Viewing as", list(ROLES), key="role", on_change=lambda: ss.update(admin_view=ss.role),
+                     help="As an administrator you can look at the app as any role. Your account stays Admin, so the Data and Policy settings stay yours.")
     sb.button("Sign out", icon=":material/logout:", width="stretch", on_click=users_view.sign_out)
 else:
     ss.role = ss.role_value
