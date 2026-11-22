@@ -13,15 +13,13 @@ python test_engine.py         # engine reproduces the diagnosis numbers
 python test_design.py         # theme matches tokens; every text colour meets WCAG AA
 python test_theme.py          # theme patch + injected script (needs Node.js)
 python test_coaching.py       # 1:1 numbers recomputed independently from the raw CSV
-python test_app.py            # 31 interaction checks: navigation, roles, search, filters, forms, dialogs, odd exports
+python test_app.py            # interaction checks: navigation, roles, search, filters, forms, dialogs, odd exports
 ruff check .                  # lint (config in ruff.toml)
 ```
 
 ## Host (Streamlit Community Cloud, free)
 
-1. Push this folder to a GitHub repo as the repo root (include `data/` and `.streamlit/`).
-2. On share.streamlit.io: New app, pick the repo, main file `app.py`, Deploy.
-3. Share the app URL.
+See [DEPLOY.md](DEPLOY.md): a hosted PostgreSQL database, a private GitHub repository, the secrets, and the first-visit steps.
 
 ## Views by role
 
@@ -73,7 +71,7 @@ views/            one module per area: overview, support, engineering, agent, in
 
 ## Accessibility and responsiveness
 
-- One H1 per page, breadcrumbs as a labelled `nav`, KPI cards labelled as groups, status changes also stated in
+- One H1 per page, KPI cards labelled as groups, status changes also stated in
   text, chart descriptions plus a **View chart data** table under each chart.
 - All text colours checked at 4.5:1 or better in both themes (`test_design.py`). Visible focus ring; reduced motion
   respected.
@@ -151,7 +149,7 @@ The **Back-tests** page computes these from the loaded data, so the numbers alwa
 
 ## Limits
 
-- No logins: the role picker filters views but does not restrict access.
+- With sign-in off, the role picker filters views but does not restrict access. Turn sign-in on (`RIDEOPS_REQUIRE_LOGIN=1`) before hosting.
 - Registry edits and known-issue links are saved in the database (see What is saved).
 - Checklists per category are v1 hypotheses to validate with L1 and engineering.
 - Deadlines and the other policy settings are your choices, not measurements; see "No fixed figures" above.
@@ -173,15 +171,15 @@ Everything the app saves goes into one database, so it is still there after a re
 
 The export has no time into and out of engineering, no escalation note and no record of the checks done, so those are recorded from the first action onward and nothing is back-filled. Times are real wall-clock times.
 
-**Database.** By default a SQLite file, `store/rideops.db` (or the folder in `RIDEOPS_STORE`). That is enough on a server or container with a persistent disk: mount a volume on that folder. Hosts with a temporary disk (e.g. Streamlit Community Cloud, most free tiers) lose the file on restart, so set `DATABASE_URL` to a hosted PostgreSQL database (Supabase, Neon, Railway and similar), for example `postgresql://user:password@host:5432/dbname`. Tables are created on first start. PostgreSQL was not tested here; SQLite was.
+**Database.** By default a SQLite file, `store/rideops.db` (or the folder in `RIDEOPS_STORE`). That is enough on a server or container with a persistent disk: mount a volume on that folder. Hosts with a temporary disk (e.g. Streamlit Community Cloud, most free tiers) lose the file on restart, so set `DATABASE_URL` to a hosted PostgreSQL database (Supabase, Neon, Railway and similar), for example `postgresql://user:password@host:5432/dbname`. Tables are created on first start. Both SQLite and PostgreSQL were tested.
 
 **API.** Data & settings > Connect an API: give a URL that returns CSV or a JSON list of tickets with the same fields as the export (a JSON object holding the list under `tickets`, `data`, `results`, `items` or `records` also works). The token is sent in the header you name and is never saved; or set `RIDEOPS_API_TOKEN` on the server. Each fetch is saved as a new export and becomes the active one. Set `RIDEOPS_API_ALLOWED_HOSTS` (comma separated) to limit which hosts the server may call. Fetching is on demand (a button), not on a schedule.
 
-**Limits.** There are no logins, so everything saved is shared by everyone who can open the app; do not host it publicly with real data until sign-in is added. Search boxes and open pages are not saved.
+**Limits.** With sign-in off, everything saved is shared by everyone who can open the app; turn sign-in on before hosting it where others can reach it. Search boxes and open pages are not saved.
 
 - A ticket on its second escalation cannot be returned to L1: it is flagged "Call required: engineering + agent".
 - Engineering limit: baseline = 75th percentile of created-to-close hours of closed escalated tickets (a proxy, it includes L1 time). A lead can save one value that replaces it.
-- Roles only shape the menu and who sees the lead actions. This is not security.
+- Without sign-in, roles only shape the menu and who sees the lead actions. This is not security. With sign-in on, the role comes from the account.
 - If the app misbehaves right after an update, restart the server: Streamlit can keep an old copy of a changed module in memory.
 
 ## Sign-in, field mapping, scheduled refresh, plain tables
