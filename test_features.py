@@ -86,6 +86,7 @@ for bad in ({"id": l1, "reason": "made up"},):
 from sqlalchemy import insert  # noqa: E402
 with store._db().begin() as c:
     c.execute(insert(store._events).values(ds=LOG, at="x", type="ticket.fixed", by="x", data="{not json"))
+store._forget()      # a row added behind the store's back
 assert len(store.read(LOG)) == 4
 print("log validation: ok")
 # 8. small and odd data must not crash the helpers (found by the full audit)

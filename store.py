@@ -12,9 +12,11 @@ Why events: the export has no record of when a ticket entered or left engineerin
 or which checks were done. Those are recorded here from the first action onward. Nothing is back-filled.
 Times are real wall-clock times. The export's own clock stops at its last ticket, so the two are kept apart.
 """
+import copy
 import json
 import os
 import threading
+import time
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -82,6 +84,36 @@ def _engine(url: str):
     return eng
 
 
+# Reads are remembered for a few seconds. One page run asks the same questions many times (which dataset, which actions, which
+# preferences); against a hosted database each ask costs a network round trip, so a page took seconds. Every write in this
+# process forgets everything at once; another server process sees a change within MEMO_SECONDS.
+MEMO_SECONDS = 4.0
+_memo: dict = {}
+_memo_lock = threading.Lock()
+
+
+def _forget() -> None:
+    with _memo_lock:
+        _memo.clear()
+
+
+def _remembered(fn):
+    def wrapper(*args, **kwargs):
+        key = (database_url(), fn.__name__, repr(args), repr(sorted(kwargs.items())))      # a default such as {} is not hashable
+        now = time.monotonic()
+        with _memo_lock:
+            hit = _memo.get(key)
+        if hit and now - hit[0] < MEMO_SECONDS:
+            return copy.deepcopy(hit[1]) if fn.__name__ == "kv_get" else hit[1]
+        val = fn(*args, **kwargs)
+        with _memo_lock:
+            _memo[key] = (now, val)
+        return copy.deepcopy(val) if fn.__name__ == "kv_get" else val
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    return wrapper
+
+
 _engine_lock = threading.Lock()
 
 
@@ -96,9 +128,11 @@ def reset() -> None:
     with _db().begin() as c:
         for t in (_events, _kv, _datasets, _users):
             c.execute(delete(t))
+    _forget()
 
 
 # ---------------- key-value ----------------
+@_remembered
 def kv_get(key: str, default=None, ds: str | None = ""):
     """ds="" = global; ds=None = the active dataset."""
     ds = active_key() if ds is None else ds
@@ -116,6 +150,7 @@ def kv_set(key: str, value, ds: str | None = "") -> None:
         c.execute(delete(_kv).where(_kv.c.ds == ds, _kv.c.k == key))
         if value is not None:
             c.execute(insert(_kv).values(ds=ds, k=key, v=json.dumps(value)))
+    _forget()
 
 
 def load_prefs() -> dict:
@@ -155,6 +190,7 @@ def save_dataset(name: str, content: bytes, source: str = "upload") -> int:
         new_id = c.execute(insert(_datasets).values(name=name[:255], source=source, content=content,
                                                     uploaded_at=now().isoformat(timespec="minutes"))).inserted_primary_key[0]
     kv_set("active_dataset", int(new_id))
+    _forget()
     return int(new_id)
 
 
@@ -162,13 +198,15 @@ def set_active(dataset_id: int | None) -> None:
     kv_set("active_dataset", dataset_id)
 
 
+@_remembered
 def active_dataset() -> dict | None:
-    """The active saved dataset (id, name, source, uploaded_at, content), or None when the sample is in use."""
+    """The active saved dataset (id, name, source, uploaded_at; the content is dataset_content), or None for the sample."""
     key = active_key()
     if key == SAMPLE:
         return None
     with _db().connect() as c:
-        r = c.execute(select(_datasets).where(_datasets.c.id == int(key))).mappings().first()
+        r = c.execute(select(_datasets.c.id, _datasets.c.name, _datasets.c.source, _datasets.c.uploaded_at)
+                      .where(_datasets.c.id == int(key))).mappings().first()
     return dict(r) if r else None
 
 
@@ -177,6 +215,7 @@ def dataset_content(dataset_id: int) -> bytes | None:
         return c.execute(select(_datasets.c.content).where(_datasets.c.id == int(dataset_id))).scalar()
 
 
+@_remembered
 def list_datasets() -> list:
     with _db().connect() as c:
         rows = c.execute(select(_datasets.c.id, _datasets.c.name, _datasets.c.source, _datasets.c.uploaded_at)
@@ -209,6 +248,7 @@ def validate(e: dict) -> str:
     return ""
 
 
+@_remembered
 def read(ds: str | None = None) -> list:
     """Saved actions of a dataset (default: the active one), oldest first, with each one's id. Actions that were taken
     back (undone) are left out, and so are the undo records themselves. Damaged rows are skipped."""
@@ -245,6 +285,7 @@ def undo(event_id: int, by: str) -> dict:
     return append("event.undo", by, {"event_id": int(event_id)})
 
 
+@_remembered
 def signature(ds: str | None = None) -> tuple:
     """Changes whenever the active dataset or its actions change; used to refresh cached data."""
     ds = ds or active_key()
@@ -261,6 +302,7 @@ def append(type_: str, by: str, data: dict, ds: str | None = None) -> dict:
         raise ValueError(err)
     with _db().begin() as c:
         c.execute(insert(_events).values(ds=ds or active_key(), at=e["at"], type=type_, by=by, data=json.dumps(data)))
+    _forget()
     return e
 
 
