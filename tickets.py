@@ -52,7 +52,29 @@ def next_moves(t, flags: list, cfg: E.Settings) -> list:
     return out or (["No action needed beyond normal follow-up."] if t.is_open else [])
 
 
-SAY = {"ticket.escalate": lambda d: "Escalated to engineering" + (f". Note: {d['note']}" if d["note"].strip() else ". No note."),
+def packet_from_event(e: dict, t) -> str:
+    """The text L1 sent with an escalation: each check, whether it was done, the answer given, and the note."""
+    d = e["data"]
+    lines = [f"Ticket: {t.ticket_id} · {t.client_name} · {t.priority}", f"Category: {t.category}", f"Issue: {t.description}", ""]
+    if d.get("answers"):
+        lines.append("Checks:")
+        for a in d["answers"]:
+            lines.append(f"  [{'x' if a['done'] else ' '}] {a['check']}")
+            if a.get("answer"):
+                lines.append(f"      Answer: {a['answer']}")
+        lines.append("")
+    else:
+        lines.append(f"Checks done: {d['checks_done']} of {d['checks_total']}")
+    return "\n".join(lines + [f"Findings: {d['note'].strip() or '(none)'}"])
+
+
+def _answered(d: dict) -> str:
+    got = [f"{a['check']}: {a['answer']}" for a in d.get("answers", []) if a.get("answer")]
+    return f" Answers: {'; '.join(got)}." if got else ""
+
+
+SAY = {"ticket.escalate": lambda d: "Escalated to engineering" + (f". Note: {d['note']}" if d["note"].strip() else ". No note.")
+       + _answered(d),
        "ticket.return": lambda d: f"Engineering returned it: {d['reason']}",
        "ticket.fixed": lambda d: "Engineering marked it fixed",
        "ticket.call_required": lambda d: "Call required: engineering + agent",

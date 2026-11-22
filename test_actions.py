@@ -90,14 +90,22 @@ print("sla limit saved: ok")
 l1 = RAW[(RAW.status == "Open - with L1") & (RAW.escalated_to_eng == "No")].ticket_id.iloc[0]
 agent = RAW[RAW.ticket_id == l1].assigned_agent.iloc[0]
 at = ok(page("desk", "desk", f"st.session_state.desk_pending = '{l1}'"))
-at.checkbox[0].check()
-at.text_area[0].input("Checked the cutoff and the roster job log")
+at.checkbox(key=f"desk_chk_{l1}_0").check()
+at.text_input(key=f"desk_ans_{l1}_1").input("Shift 22 Sep, 18:00 night shift")        # an answer counts as done
+at.text_area(key=f"desk_note_{l1}").input("Checked the cutoff and the roster job log")
+at.run()
+packet = [c.value for c in at.code if c.value.startswith(f"Ticket: {l1}")][0]
+assert "Answer: Shift 22 Sep, 18:00 night shift" in packet and "[x]" in packet, packet
+assert "Findings: Checked the cutoff" in packet, packet
 clicks(at, "Send to engineering")[0].click().run()
 assert not any(x["type"] == "ticket.escalate" for x in store.read()), "an incomplete escalation must ask first"
 assert any("not done" in w.value for w in at.warning), [w.value for w in at.warning]
 clicks(at, "Confirm")[0].click().run()
 e = store.read()[-1]
-assert e["type"] == "ticket.escalate" and e["data"]["id"] == l1 and e["data"]["checks_done"] == 1, e
+assert e["type"] == "ticket.escalate" and e["data"]["id"] == l1 and e["data"]["checks_done"] == 2, e
+assert [a["answer"] for a in e["data"]["answers"] if a["answer"]] == ["Shift 22 Sep, 18:00 night shift"], e["data"]["answers"]
+at = ok(page("escalations", "escalations", f"st.session_state.esc_pick = '{l1}'"))
+assert any("Answer: Shift 22 Sep" in c.value for c in at.code), "engineering sees what L1 sent"
 log = store.escalation_log(store.read(), RAW)
 assert log.agent.iloc[0] == agent and len(log) == 1
 d = E.enrich(store.apply(RAW, store.read()), pd.Timestamp("2026-09-30 23:59"))

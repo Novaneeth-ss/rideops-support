@@ -12,6 +12,7 @@ import streamlit as st
 import engine as E
 import state
 import store
+import tickets
 import ui
 
 LEADS = ("Support lead", "All views", "Admin")
@@ -85,6 +86,10 @@ def _open_tab(c, open_e) -> None:
     left.markdown(f"**{t.client_name}** · {t.description}")
     if right.button("Details", key="esc_details", icon=":material/open_in_new:", width="stretch"):
         state.ticket_dialog(pick)
+    sent = [e for e in store.read() if e["type"] == "ticket.escalate" and e["data"].get("id") == pick]
+    if sent:
+        with st.expander(f"What L1 sent ({sent[-1]['by']}, {sent[-1]['at'][:16].replace('T', ' ')})", icon=":material/description:"):
+            st.code(tickets.packet_from_event(sent[-1], t), language=None, wrap_lines=True)
     can_act = _role() in ENGINEERS
     if t.call_required:
         if pd.notna(t.call_held_at):

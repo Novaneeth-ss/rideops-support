@@ -120,7 +120,20 @@ def _macro_box(kind: str, t, agent: str) -> None:
         st.rerun()
 
 
+def packet_text(t, items: list, ticked: list, answers: list, note: str) -> str:
+    """The case as plain text to paste into the engineering ticket: each check, whether it was done, and the answer given."""
+    lines = [f"Ticket: {t.ticket_id} · {t.client_name} · {t.priority}", f"Category: {t.category}", f"Issue: {t.description}", "",
+             "Checks:"]
+    for item, ok, ans in zip(items, ticked, answers):
+        lines.append(f"  [{'x' if ok else ' '}] {item}")
+        if ans:
+            lines.append(f"      Answer: {ans}")
+    return "\n".join(lines + ["", f"Findings: {note.strip() or '(none)'}"])
+
+
+@st.fragment
 def _escalation_tab(c, t, agent: str) -> None:
+    """A fragment: ticking a check or typing an answer updates only this tab, and the text to copy follows what is typed."""
     ss = st.session_state
     if t.status != "Open - with L1":
         st.info("This ticket is already with engineering. Follow it on the Escalations page.", icon=":material/send:")
@@ -128,30 +141,37 @@ def _escalation_tab(c, t, agent: str) -> None:
     if _known_issues(t, agent):
         return
     items = E.CHECKLISTS.get(t.category, GENERIC)
-    st.markdown("**2 · Checks and note**")
-    st.caption("Tick each check you have done. Engineering returns most tickets for missing information. If you send with "
-               "checks or the note missing, you are asked to confirm and it is recorded that way.")
-    with st.form(f"desk_esc_{t.ticket_id}"):
-        done = [st.checkbox(i, key=f"desk_chk_{t.ticket_id}_{n}") for n, i in enumerate(items)]
-        note = st.text_area("What you checked and what you saw", key=f"desk_note_{t.ticket_id}",
-                            placeholder="E.g. cutoff in admin is 18:00, roster job ran at 18:05, 3 employees missing")
-        sent = st.form_submit_button("Send to engineering", type="primary", icon=":material/send:")
-    packet = "\n".join([f"Ticket: {t.ticket_id} · {t.client_name} · {t.priority}", f"Category: {t.category}",
-                        f"Issue: {t.description}", "Checks done:"] + [f"  [{'x' if ok else ' '}] {i}" for i, ok in zip(items, done)]
-                       + [f"Findings: {note.strip() or '(none)'}"])
-    with st.expander("Text to paste into the engineering ticket"):
-        st.code(packet, language=None, wrap_lines=True)
+    st.markdown("**2 · Checks and answers**")
+    st.caption("For each check, write what you found. A check with an answer counts as done; you can also just tick it. "
+               "Engineering returns most tickets for missing information. If you send with checks or the note missing, you are "
+               "asked to confirm and it is recorded that way.")
+    ticked, answers = [], []
+    for n, item in enumerate(items):
+        with st.container(border=True):
+            box = st.checkbox(item, key=f"desk_chk_{t.ticket_id}_{n}")
+            ans = st.text_input(f"Answer for: {item}", key=f"desk_ans_{t.ticket_id}_{n}", label_visibility="collapsed",
+                                placeholder="What you found (optional)", max_chars=300).strip()
+        ticked.append(bool(box or ans))
+        answers.append(ans)
+    note = st.text_area("What you checked and what you saw", key=f"desk_note_{t.ticket_id}",
+                        placeholder="E.g. cutoff in admin is 18:00, roster job ran at 18:05, 3 employees missing")
+    st.markdown("**3 · Text to copy**")
+    st.caption("Updates as you type. Use the copy icon, then paste it into the engineering ticket or chat. "
+               "\"Send to engineering\" below records the escalation in this app.")
+    st.code(packet_text(t, items, ticked, answers, note), language=None, wrap_lines=True)
     pkey = f"desk_payload_{t.ticket_id}"
-    if sent:
-        payload = {"note": note.strip(), "checks_done": int(sum(done)), "checks_total": len(items)}
+    payload = {"note": note.strip(), "checks_done": int(sum(ticked)), "checks_total": len(items),
+               "answers": [{"check": i, "done": ok, "answer": a} for i, ok, a in zip(items, ticked, answers)]}
+    if ss.get(pkey) and ss[pkey] != payload:
+        ss.pop(pkey)                                          # the agent changed something after pressing Send: ask again
+    if st.button("Send to engineering", type="primary", icon=":material/send:", key=f"desk_esc_{t.ticket_id}"):
         if payload["checks_done"] == payload["checks_total"] and len(payload["note"]) >= store.MIN_NOTE_CHARS:
             _send(t, agent, payload)
         ss[pkey] = payload
         ss[f"desk_send_{t.ticket_id}__armed"] = True          # ask before sending an incomplete escalation
     if ss.get(pkey):
         p = ss[pkey]
-        gaps = [f"{p['checks_total'] - p['checks_done']} of {p['checks_total']} checks not done"] \
-            if p["checks_done"] < p["checks_total"] else []
+        gaps = [f"{p['checks_total'] - p['checks_done']} of {p['checks_total']} checks not done"]             if p["checks_done"] < p["checks_total"] else []
         if len(p["note"]) < store.MIN_NOTE_CHARS:
             gaps.append("no detailed note")
         if state.confirm_button("Send anyway", f"desk_send_{t.ticket_id}", f"{', '.join(gaps).capitalize()}. "
