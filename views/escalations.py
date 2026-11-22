@@ -221,7 +221,7 @@ def feature_requests(c) -> None:
                       "by_month": g.month.apply(lambda m: " / ".join(str(int((m == x).sum())) for x in months))})
     t = t.sort_values("tickets", ascending=False).rename_axis("request").reset_index()
     saved = store.feature_status(store.read())
-    t["status"] = t.request.map(saved).fillna("No decision")
+    t["status"] = t.request.map(lambda r: saved.get(r, "No decision"))
     ui.dataframe(t, hide_index=True, width="stretch", column_config={
         "request": st.column_config.TextColumn("Request", width="large", pinned=True),
         "tickets": st.column_config.NumberColumn("Tickets"), "clients": st.column_config.NumberColumn("Clients"),

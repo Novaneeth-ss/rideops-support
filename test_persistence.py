@@ -134,7 +134,13 @@ print("api data saved: ok")
 
 # 7. a hosted database: the old postgres:// scheme is accepted
 os.environ["DATABASE_URL"] = "postgres://u:p@h:5432/db"
-assert store.database_url() == "postgresql://u:p@h:5432/db"
+assert store.database_url() == "postgresql://u:p@h:5432/db?sslmode=require", "a remote database is encrypted by default"
+os.environ["DATABASE_URL"] = "postgresql://u:p@h:5432/db?sslmode=disable"
+assert store.database_url().endswith("sslmode=disable"), "an explicit choice is kept"
+os.environ["DATABASE_URL"] = "postgresql://u:p@localhost:5432/db"
+assert "sslmode" not in store.database_url(), "local databases are left alone"
+os.environ["DATABASE_URL"] = "postgresql://u:p@/db?host=/tmp/sock"
+assert "sslmode" not in store.database_url(), "socket paths are left alone"
 os.environ.pop("DATABASE_URL")
 # 8. many sessions writing at once, starting from an empty database, lose nothing (found by the full audit)
 import threading  # noqa: E402

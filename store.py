@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import pandas as pd
 from sqlalchemy import Column, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select
@@ -66,12 +67,23 @@ _users = Table("users", _meta, Column("username", String(60), primary_key=True),
                Column("locked_until", String(32)), Column("created_at", String(32)))
 
 
+def _require_tls(url: str) -> str:
+    """A remote PostgreSQL connection is encrypted unless the URL says otherwise. Without sslmode, the driver may quietly fall
+    back to plain text. Local databases (localhost or a socket path) are left alone."""
+    parts = urlsplit(url)
+    if not parts.scheme.startswith("postgres") or parts.hostname in (None, "localhost", "127.0.0.1", "::1"):
+        return url
+    if "sslmode=" in parts.query or "host=" in parts.query:
+        return url
+    return urlunsplit(parts._replace(query=(parts.query + "&" if parts.query else "") + "sslmode=require"))
+
+
 def database_url() -> str:
     url = os.environ.get("DATABASE_URL", "").strip()
     if url.startswith("postgres://"):            # some hosts still hand out the old scheme
         url = "postgresql://" + url[len("postgres://"):]
     if url:
-        return url
+        return _require_tls(url)
     folder = Path(os.environ.get("RIDEOPS_STORE") or Path(__file__).parent / "store")
     folder.mkdir(parents=True, exist_ok=True)
     return f"sqlite:///{(folder / 'rideops.db').as_posix()}"
