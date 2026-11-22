@@ -60,14 +60,16 @@ def escalations():
         tracking_section(c)
 
 
+@st.fragment
 def _open_tab(c, open_e) -> None:
+    """A fragment: picking a row or clicking Details reruns only this tab, not the whole page."""
     if open_e.empty:
         ui.empty_state("No open escalations", "Engineering is clear.")
         return
     att = c.att
     ui.section("Open escalations", "Oldest first. Select a row to act on it below.")
     view = att[att.ticket_id.isin(open_e.ticket_id)].sort_values("age_h", ascending=False)
-    state.ticket_table(view, ["ticket_id", "eng_ticket_id", "age_h", "eng_handoffs", "eng_outcome", "flags", "category",
+    state.ticket_table_body(view, ["ticket_id", "eng_ticket_id", "age_h", "eng_handoffs", "eng_outcome", "flags", "category",
                               "description", "client_name", "assigned_agent"], key="esc_tbl", height=340, bulk=False,
                        pick_key="esc_pick")
 

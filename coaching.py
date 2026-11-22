@@ -13,6 +13,7 @@ How gaps are judged
   results will be chance, so they are labelled as conversation starters, not verdicts.
 - Anything with fewer than MIN_N tickets on either side is reported as "not enough data".
 """
+import contextlib
 from dataclasses import dataclass
 from math import erf, sqrt
 
@@ -97,6 +98,35 @@ def p_from_z(z: float) -> float:
 
 # ---------------------------------------------------------------- metrics
 
+_SHARED: dict | None = None
+
+
+@contextlib.contextmanager
+def shared(d: pd.DataFrame):
+    """While open, the agent-independent pieces (a metric's population, every agent's value) are computed once for all agents
+    instead of once per agent. Use it when building the profiles of every agent from the same tickets."""
+    global _SHARED
+    _SHARED = {"d": id(d)}
+    try:
+        yield
+    finally:
+        _SHARED = None
+
+
+def _once(fn):
+    def wrapper(d, key, *args):
+        if _SHARED is None or _SHARED["d"] != id(d):
+            return fn(d, key, *args)
+        k = (fn.__name__, key, args)
+        if k not in _SHARED:
+            _SHARED[k] = fn(d, key, *args)
+        return _SHARED[k]
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    return wrapper
+
+
+@_once
 def _pop(d: pd.DataFrame, key: str) -> pd.DataFrame:
     """The tickets a metric is measured on."""
     if key in ("esc_rate", "avoid_per100") or key.startswith("r_"):
@@ -146,6 +176,11 @@ def _values(pop: pd.DataFrame, key: str) -> pd.Series:
     raise KeyError(key)
 
 
+@_once
+def _pop_values(d: pd.DataFrame, key: str) -> pd.Series:
+    return _values(_pop(d, key), key)
+
+
 def _summary(vals: pd.Series, spec: Spec) -> float:
     if len(vals) == 0:
         return float("nan")
@@ -156,11 +191,12 @@ def metric(d: pd.DataFrame, key: str, agent: str) -> dict:
     """Agent vs peers (all other agents pooled) for one metric."""
     spec = SPEC[key]
     pop = _pop(d, key)
-    mine, theirs = pop[pop.assigned_agent == agent], pop[pop.assigned_agent != agent]
-    va, vp = _values(mine, key), _values(theirs, key)
+    allv = _pop_values(d, key)                      # one value per ticket; split by agent on the values, not on the whole table
+    mine = (pop.assigned_agent == agent).to_numpy()
+    va, vp = allv[mine], allv[~mine]
     out = {"key": key, "label": spec.label, "unit": spec.unit, "better": spec.better, "group": spec.group,
            "n_agent": len(va), "n_peers": len(vp), "agent": _summary(va, spec), "peers": _summary(vp, spec),
-           "team": _summary(_values(pop, key), spec)}
+           "team": _summary(allv, spec)}
     out["peer_agents"] = int(d.assigned_agent.nunique() - 1)
     out["x_agent"] = int(va.sum()) if spec.kind == "rate" else None
     if len(va) < MIN_N or len(vp) < MIN_N:
@@ -190,6 +226,7 @@ def fmt(spec_or_key, v: float) -> str:
     return {"pct": f"{v:.1%}", "per100": f"{v * 100:.1f}", "hours": f"{v:.1f}h", "score": f"{v:.2f}"}[spec.unit]
 
 
+@_once
 def team_values(d: pd.DataFrame, key: str) -> pd.Series:
     """Value of one metric for every agent (used for ranks and pairing)."""
     spec = SPEC[key]

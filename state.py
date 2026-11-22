@@ -45,14 +45,17 @@ def _prepare(raw: bytes, cfg: E.Settings | None, sig: tuple):
 
 
 def coaching_profile(raw: bytes, agent: str, cfg: E.Settings | None = None) -> dict:
-    """One agent's 1:1 profile, cached per dataset, settings and event log (see coaching.py)."""
-    return _coaching_profile(raw, agent, cfg, store.signature())
+    """One agent's 1:1 profile. All agents are computed together (sharing the work that does not depend on the agent) and
+    cached per dataset, settings and event log (see coaching.py)."""
+    return _all_profiles(raw, cfg, store.signature())[agent]
 
 
-@st.cache_data(show_spinner="Preparing 1:1 notes…", max_entries=40)
-def _coaching_profile(raw: bytes, agent: str, cfg, sig: tuple) -> dict:
+@st.cache_resource(show_spinner="Preparing 1:1 notes…", max_entries=6)
+def _all_profiles(raw: bytes, cfg, sig: tuple) -> dict:
+    # cache_resource, not cache_data: the profiles are only read, so there is no copy of them on every page run
     d, _, att, _ = _prepare(raw, cfg, sig)
-    return coaching.profile(d, att, agent)
+    with coaching.shared(d):
+        return {a: coaching.profile(d, att, a) for a in sorted(d.assigned_agent.unique())}
 
 
 def backtests(raw: bytes, cfg: E.Settings | None = None):
@@ -302,8 +305,8 @@ def ticket_cards(cards: list, key: str) -> None:
                 show_ticket_list(card["label"], card["ids"], f"{key}_{i}", card.get("columns"))
 
 
-def ticket_table(df: pd.DataFrame, columns: list, key: str, *, height: int = 420, bulk: bool = True,
-                 pick_key: str | None = None) -> None:
+def ticket_table_body(df: pd.DataFrame, columns: list, key: str, *, height: int = 420, bulk: bool = True,
+                      pick_key: str | None = None) -> None:
     """Selectable ticket table. One row opens the detail dialog; several rows enable bulk actions."""
     if df.empty:
         ui.empty_state("No tickets match", "Clear or change the filters above.")
@@ -349,6 +352,11 @@ def ticket_table(df: pd.DataFrame, columns: list, key: str, *, height: int = 420
                             icon=":material/download:", on_click="ignore")
         if bar.button(f"Draft client update ({len(picked)})", icon=":material/mail:", key=f"{key}_draft"):
             client_update_dialog(picked.ticket_id.tolist())
+
+
+# Selecting a row reruns only this table, not the whole page (a page run recomputes cards, charts and every other table).
+# Pages that act on the selected row in the same fragment (Escalations) call ticket_table_body inside their own fragment.
+ticket_table = st.fragment(ticket_table_body)
 
 
 @ui.popup("Draft client updates")
