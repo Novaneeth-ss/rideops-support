@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="28" viewBox="0 0 168 28" role="img" aria-label="RideOps Support">
+  <!-- one mid-tone blue that clears 3:1 on both the light and dark sidebar (st.logo has no theme variants) -->
+  <rect width="28" height="28" rx="7" fill="#4C6EF5"/>
+  <text x="14" y="19.5" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">R</text>
+  <text x="38" y="19.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="650" fill="#4C6EF5">RideOps Support</text>
+</svg>

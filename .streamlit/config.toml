@@ -1,0 +1,80 @@
+# Mirrors tokens.py (test_design.py checks they match). Light is the default for every new visitor; the
+# sun/moon button at the top right switches themes (see theme_head.py). toolbarMode "viewer" keeps
+# Streamlit's own menu in the page because the toggle drives it; the patch hides it from view.
+
+[server]
+headless = true
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"
+
+[theme]
+font = "Inter, 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFont = "Inter, 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif"
+codeFont = "'JetBrains Mono', 'Cascadia Code', Consolas, 'SFMono-Regular', monospace"
+baseFontSize = 14
+headingFontSizes = ["1.625rem", "1.125rem", "0.9375rem", "0.875rem", "0.8125rem", "0.75rem"]
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+baseRadius = "6px"
+buttonRadius = "6px"
+metricValueFontSize = "1.75rem"
+metricValueFontWeight = 600
+showWidgetBorder = true
+showSidebarBorder = true
+linkUnderline = false
+
+[theme.light]
+primaryColor = "#2F54EB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4F6"
+textColor = "#111827"
+borderColor = "#E3E6EA"
+dataframeBorderColor = "#EEF0F2"
+dataframeHeaderBackgroundColor = "#F7F8FA"
+linkColor = "#2F54EB"
+redColor = "#B91C1C"
+redBackgroundColor = "#FEF2F2"
+orangeColor = "#B45309"
+orangeBackgroundColor = "#FFF7ED"
+greenColor = "#15803D"
+greenBackgroundColor = "#ECFDF3"
+blueColor = "#1D4ED8"
+blueBackgroundColor = "#EFF4FF"
+grayColor = "#5F6673"
+grayBackgroundColor = "#F3F4F6"
+chartCategoricalColors = ["#2F54EB", "#0F766E", "#B45309", "#7C3AED", "#BE185D", "#64748B"]
+
+[theme.light.sidebar]
+backgroundColor = "#F7F8FA"
+secondaryBackgroundColor = "#FFFFFF"
+borderColor = "#E3E6EA"
+
+[theme.dark]
+primaryColor = "#7C9BFF"
+backgroundColor = "#0D0F14"
+secondaryBackgroundColor = "#1A1E26"
+textColor = "#E5E7EB"
+borderColor = "#262B35"
+dataframeBorderColor = "#1D2129"
+dataframeHeaderBackgroundColor = "#12151B"
+linkColor = "#7C9BFF"
+redColor = "#F87171"
+redBackgroundColor = "#341A1A"
+orangeColor = "#FBBF24"
+orangeBackgroundColor = "#2E2410"
+greenColor = "#4ADE80"
+greenBackgroundColor = "#0F2A1C"
+blueColor = "#60A5FA"
+blueBackgroundColor = "#14233A"
+grayColor = "#8B94A3"
+grayBackgroundColor = "#1A1E26"
+chartCategoricalColors = ["#7C9BFF", "#2DD4BF", "#FBBF24", "#C4B5FD", "#F9A8D4", "#94A3B8"]
+
+[theme.dark.sidebar]
+backgroundColor = "#12151B"
+secondaryBackgroundColor = "#1A1E26"
+borderColor = "#262B35"

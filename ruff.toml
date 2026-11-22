@@ -1,0 +1,28 @@
+line-length = 130
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "B", "UP", "SIM"]
+ignore = ["B905", "SIM117"]
+
+[lint.per-file-ignores]
+"ui.py" = ["E501"]  # embedded CSS block
+"test_theme.py" = ["E501"]  # embedded JS harness
+"coaching.py" = ["E501"]  # long evidence/action sentences
+"views/oneonone.py" = ["E501"]  # page copy
+"guide.py" = ["E501"]  # tour copy
+"test_coaching.py" = ["E501", "E712"]
+"views/*.py" = ["E501"]  # page copy
+"app.py" = ["E501"]
+"test_data_driven.py" = ["E501"]
+"state.py" = ["E501"]
+"tickets.py" = ["E501"]
+"engine.py" = ["E501"]
+"store.py" = ["E501"]
+"test_app.py" = ["E501"]
+"test_phase2.py" = ["E501"]
+"test_phase3.py" = ["E501"]
+"test_auth.py" = ["E501"]
+"test_api.py" = ["E501"]
+"test_phase4.py" = ["E501"]
+"test_security.py" = ["E501"]

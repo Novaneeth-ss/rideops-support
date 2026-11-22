@@ -1,0 +1,8 @@
+# exact versions the app and tests were verified with
+streamlit==1.67.0
+pandas==3.1.1
+numpy==2.4.6
+altair==6.3.0
+sqlalchemy==2.0.43
+# only for a hosted PostgreSQL database (set DATABASE_URL); SQLite needs nothing more
+psycopg2-binary>=2.9
