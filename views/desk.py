@@ -69,6 +69,57 @@ def _send(t, agent: str, payload: dict) -> None:
     st.rerun()
 
 
+STANDARD = "Standard (built-in)"
+DEFAULTS = {
+    "reply": "Hi {client} team,\n\nThanks for reporting \"{issue}\". We are looking into it now and will update you as soon "
+             "as there is news.\n\nRideOps Support",
+    "close": "Hi {client} team,\n\nWe believe \"{issue}\" is fixed. Could you confirm it is working for you? We will keep "
+             "the ticket open until you confirm.\n\nRideOps Support",
+}
+
+
+def _macro_box(kind: str, t, agent: str) -> None:
+    """Pick the built-in text or one of this person's own templates, see it filled in for this ticket, and save or delete templates."""
+    ss = st.session_state
+    owner = state.actor(agent)
+    mine = store.macros(owner, kind)
+    names = [STANDARD] + [m["name"] for m in mine]
+    key = f"desk_macro_{kind}"
+    pick = ss.pop(f"{key}_pick", None)          # a template saved a moment ago becomes the selected one
+    if pick in names:
+        ss[key] = pick
+    if ss.get(key) not in names:
+        ss[key] = STANDARD
+    choice = st.selectbox("Template", names, key=key, help=f"Your own templates are saved under {owner}.")
+    body = DEFAULTS[kind] if choice == STANDARD else next(m["body"] for m in mine if m["name"] == choice)
+    values = {"client": t.client_name, "ticket": t.ticket_id, "issue": t.description, "category": t.category,
+              "agent": t.assigned_agent}
+    st.code(store.fill_macro(body, values), language=None, wrap_lines=True)
+    with st.expander("Save your own template", icon=":material/bookmark_add:"):
+        st.caption("Write it once and pick it here next time. Words in curly brackets are filled in for each ticket: "
+                   + ", ".join(store.MACRO_PLACEHOLDERS) + ".")
+        with st.form(f"desk_macro_form_{kind}", border=False, clear_on_submit=False):
+            name = st.text_input("Template name", key=f"{key}_new_name", max_chars=store.MACRO_NAME_MAX,
+                                 placeholder="E.g. Roster sync, known issue")
+            text = st.text_area("Text", key=f"{key}_new_text", max_chars=store.MACRO_BODY_MAX, height=160,
+                                value=DEFAULTS[kind])
+            saved = st.form_submit_button("Save template", icon=":material/save:")
+        if saved:
+            err = store.save_macro(owner, kind, name, text)
+            if err:
+                st.error(err, icon=":material/error:")
+            else:
+                ss[f"{key}_pick"] = name.strip()
+                state.flash(f"Template “{name.strip()}” saved", ":material/bookmark_added:")
+                st.rerun()
+    if choice != STANDARD and state.confirm_button("Delete this template", f"{key}_del", f"Delete “{choice}”? "
+                                                   "Tickets already sent are not affected.", icon=":material/delete:"):
+        store.delete_macro(owner, kind, choice)
+        ss.pop(key, None)
+        state.flash(f"Template “{choice}” deleted", ":material/delete:")
+        st.rerun()
+
+
 def _escalation_tab(c, t, agent: str) -> None:
     ss = st.session_state
     if t.status != "Open - with L1":
@@ -171,8 +222,7 @@ def desk():
         tab_reply, tab_esc, tab_close = st.tabs(["Draft reply", "Escalate", "Draft close message"])
         with tab_reply:
             st.caption("Draft only: this app does not send messages. Copy it into your email or chat.")
-            st.code(f"Hi {t.client_name} team,\n\nThanks for reporting \"{t.description}\". We are looking into it now and "
-                    "will update you as soon as there is news.\n\nRideOps Support", language=None, wrap_lines=True)
+            _macro_box("reply", t, agent)
         with tab_esc:
             _escalation_tab(c, t, agent)
         with tab_close:
@@ -180,5 +230,4 @@ def desk():
                 st.warning("Tickets like this reopen more than most. Confirm the fix with the client before closing.",
                            icon=":material/replay:")
             st.caption("Ask the client to confirm before closing. Closing is not recorded in this app.")
-            st.code(f"Hi {t.client_name} team,\n\nWe believe \"{t.description}\" is fixed. Could you confirm it is working for "
-                    "you? We will keep the ticket open until you confirm.\n\nRideOps Support", language=None, wrap_lines=True)
+            _macro_box("close", t, agent)

@@ -147,6 +147,37 @@ mine_open = RAW[(RAW.assigned_agent == agent_pick) & (RAW.status != "Closed")]
 if (mine_open.status == "Open - with L1").any():
     assert RAW.set_index("ticket_id").loc[head, "status"] == "Open - with L1", head
 print("desk default ticket: ok")
+
+# 6f. own reply and closing templates: saved per person, chosen from a list, filled in for the ticket, deleted again
+who = agent_pick
+store.kv_set(f"macros:{who}", None)
+at = ok(page("desk", "desk", f"st.session_state.desk_agent = '{agent_pick}'"))
+assert any("Hi " in c.value for c in at.code), "the built-in text is still there"
+assert not store.macros(who)
+texts = {"reply": "Dear {client} team, ticket {ticket} ({category}) is with {agent}. {issue}",
+         "close": "Closing {ticket}. {unknown}"}
+for kind, text in texts.items():
+    at.text_input(key=f"desk_macro_{kind}_new_name").input(f"my {kind}")
+    at.text_area(key=f"desk_macro_{kind}_new_text").input(text)
+    [b for b in at.button if b.label == "Save template" and b.key and kind in b.key][0].click().run()
+    ok(at)
+saved = store.macros(who)
+assert {m["kind"] for m in saved} == {"reply", "close"} and not store.macros("someone else"), saved
+at = ok(page("desk", "desk", f"st.session_state.desk_agent = '{agent_pick}'"))
+sel = at.selectbox(key="desk_macro_reply")
+assert sel.options == ["Standard (built-in)", "my reply"], sel.options
+sel.select("my reply").run()
+shown = [c.value for c in at.code if c.value.startswith("Dear ")][0]
+assert "{" not in shown and head in shown and agent_pick in shown, shown     # placeholders are filled in for this ticket
+assert store.fill_macro("Closing {ticket}. {unknown}", {"ticket": "X"}) == "Closing X. {unknown}"
+assert store.save_macro(who, "reply", "", "x") and store.save_macro(who, "other", "a", "b")
+assert store.save_macro(who, "reply", "a", "x" * 3000)
+# the same name replaces the old text
+assert store.save_macro(who, "reply", "my reply", "New text") is None and len(store.macros(who, "reply")) == 1
+clicks(at, "Delete this template")[0].click().run()
+clicks(at, "Confirm")[0].click().run()
+assert [m["name"] for m in store.macros(who, "reply")] == [] and len(store.macros(who, "close")) == 1
+print("own reply templates: ok")
 # 7. the registry survives a restart (a new session reads the saved copy), and reset removes it
 reg = store.load_registry()
 assert reg is not None and "Invoice PDF missing totals" in set(reg.template)

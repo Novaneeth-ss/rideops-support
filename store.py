@@ -162,6 +162,46 @@ def save_prefs(prefs: dict) -> None:
     kv_set("prefs", prefs)
 
 
+# ---------------- saved reply templates (macros) ----------------
+MACRO_KINDS = ("reply", "close")
+MACRO_PLACEHOLDERS = ("{client}", "{ticket}", "{issue}", "{category}", "{agent}")
+MACRO_NAME_MAX, MACRO_BODY_MAX, MACRO_LIMIT = 60, 2000, 20     # per person and kind
+
+
+def macros(owner: str, kind: str | None = None) -> list:
+    """The templates this person saved: [{kind, name, body}], optionally for one kind."""
+    rows = kv_get(f"macros:{owner}", []) or []
+    return [m for m in rows if kind is None or m.get("kind") == kind]
+
+
+def save_macro(owner: str, kind: str, name: str, body: str) -> str | None:
+    """Save (or replace, by name) a template. Returns the reason it was refused, or None when saved."""
+    name, body = (name or "").strip(), (body or "").strip()
+    if kind not in MACRO_KINDS:
+        return "Unknown template type."
+    if not name or not body:
+        return "Give the template a name and some text."
+    if len(name) > MACRO_NAME_MAX or len(body) > MACRO_BODY_MAX:
+        return f"Keep the name under {MACRO_NAME_MAX} characters and the text under {MACRO_BODY_MAX}."
+    rows = macros(owner)
+    kept = [m for m in rows if not (m["kind"] == kind and m["name"].lower() == name.lower())]
+    if len([m for m in kept if m["kind"] == kind]) >= MACRO_LIMIT:
+        return f"You can keep up to {MACRO_LIMIT} templates of each type. Delete one first."
+    kv_set(f"macros:{owner}", kept + [{"kind": kind, "name": name, "body": body}])
+    return None
+
+
+def delete_macro(owner: str, kind: str, name: str) -> None:
+    kv_set(f"macros:{owner}", [m for m in macros(owner) if not (m["kind"] == kind and m["name"] == name)] or None)
+
+
+def fill_macro(body: str, values: dict) -> str:
+    """Put the ticket's details into a template. Unknown {words} are left as typed."""
+    for k, v in values.items():
+        body = body.replace("{" + k + "}", str(v))
+    return body
+
+
 def load_registry() -> pd.DataFrame | None:
     """The known-issue registry of the active dataset as last saved, or None when nobody has saved one."""
     rows = kv_get("registry", None, ds=None)
