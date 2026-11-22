@@ -14,8 +14,8 @@ import state
 import store
 import ui
 
-LEADS = ("Support lead", "All views")
-ENGINEERS = ("Engineering lead", "All views")
+LEADS = ("Support lead", "All views", "Admin")
+ENGINEERS = ("Engineering lead", "All views", "Admin")
 CALL_FLAG = "Call required: engineering + agent"
 
 
@@ -79,7 +79,7 @@ def _open_tab(c, open_e) -> None:
         pick = ids[0]
     ui.section(f"Act on {pick}")
     if _role() not in ENGINEERS + LEADS:
-        st.caption("Switch the role to Engineering lead or All views to return or close escalations.")
+        st.caption("Switch the role to Engineering lead or All views (or sign in as an administrator) to return or close escalations.")
     t = open_e[open_e.ticket_id.eq(pick)].iloc[0]
     left, right = st.columns([5, 1], vertical_alignment="center")
     left.markdown(f"**{t.client_name}** · {t.description}")
